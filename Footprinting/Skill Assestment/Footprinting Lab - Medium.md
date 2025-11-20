@@ -1,0 +1,122 @@
+Its a server that everyone can access inside the network.
+A user named HTB has been created.
+The goal is to obtain the credentials of this user
+IP 10.129.141.255
+
+We will start with a scan with Nmap
+```
+nmap -sV -sC --min-rate=1000 -oN initial_recon 10.129.141.255
+```
+![[../../IMAGES/Pasted image 20251120182111.png]]
+We can see that we have a NFS service
+
+We also have RDP from the port 3389, smb from port 139 and 445
+
+we will check the available nfs shares
+```
+showmount -e 10.129.141.255
+```
+
+We see that we have one available: /TechSupport
+<<<<<<< HEAD
+![[../../IMAGES/Pasted image 20251120182436.png]]
+=======
+
+![Pasted image 20251120182436](../../../IMAGES/Pasted%20image%2020251120182436.png)
+>>>>>>> fc753dee0157aa6421e9cceab51aa3a99566ecdd
+
+we will mount this NFS Share
+![[../../IMAGES/Pasted image 20251120182803.png]]
+
+When we try to access the folder there is only tickets
+![[../../IMAGES/Pasted image 20251120182933.png]]
+only one has some bits size 
+![[../../IMAGES/Pasted image 20251120183002.png]]
+![[../../IMAGES/Pasted image 20251120183027.png]]
+
+We find out there is a smtp service too at port 25. We find credentials:
+Alex / lol123!mD
+
+We will now check the smtp server
+
+## SMTP Enumeration
+We will try first to access with TELNET
+telnet 10.129.141.255
+
+Connection is refuesd
+
+We willl run a Open Relay script scan with Nmap
+```
+sudo nmap 10.129.141.255 -p25 --script smtp-open-relay -v
+```
+Nothing came up.
+
+## SMB Enumeration
+WE will try a smb scan with nmap
+sudo nmap 10.129.141.255 -sV -sC -p139,445
+
+![[../../IMAGES/Pasted image 20251120184532.png]]
+We have not found something valuable.
+
+We will try and connect to the Share.
+smbclient -N -L //10.129.141.255
+![[../../IMAGES/Pasted image 20251120184833.png]]
+
+We will go and use rpcclient.
+rpcclient -U "" 10.129.141.255
+![[../../IMAGES/Pasted image 20251120184841.png]]
+
+## RDP Enumeration
+We will try and create a session
+Alex / lol123!mD
+xfreerdp /u:Alex /p:"lol123!mD" /v:10.129.141.255
+![[../../IMAGES/Pasted image 20251120190346.png]]
+## Going back to SMB
+I have failed to connect to the Share because I didn't specify the user
+smbclient -L 10.129.141.255 -U alex
+![[../../IMAGES/Pasted image 20251120185406.png]]
+
+Now we can try to access to any of those shares.
+smbclient  //10.129.141.255/Users -U Alex
+![[../../IMAGES/Pasted image 20251120185637.png]]
+Nothing found. Will try with devshare
+smbclient  //10.129.141.255/ devshare -U Alex
+![[../../IMAGES/Pasted image 20251120190150.png]]
+
+We create a folder so we can get the file
+mkdir /tmp/smb
+cd /tmp/smb
+![[../../IMAGES/Pasted image 20251120190253.png]]
+
+We have found new credentials
+sa:87N1ns@slls83
+![[../../IMAGES/Pasted image 20251120190406.png]]
+we can try to rdp
+xfreerdp /u:Alex /p:'sa:87N1ns@slls83' /v:10.129.141.255
+Cant use this one because of the GUI
+
+evil-winrm -i 10.129.141.255 -u sa -p '87N1ns@slls83'
+we can use this one for GUI
+
+we will try for smb again
+smbclient //10.129.141.255/ADMIN$ -U Alex
+xfreerdp /u:sa /p:'87N1ns@slls83' /v:10.129.141.255
+
+## Going back to RDP
+xfreerdp /u:Alex /p:'lol123!mD' /v:10.129.141.255
+
+There is a difference wiht "" and ''
+![[../../IMAGES/Pasted image 20251120191631.png]]
+the credentials we have found in important.txt is for the sql server. sa:87N1ns@slls83 
+**Note!:** we have to run it with admin
+![[../../IMAGES/Pasted image 20251120191759.png]]
+
+Now we can access it and search for HTB user
+![[../../IMAGES/Pasted image 20251120192222.png]] 
+
+
+Right click on dbo.accounts and edit first 200. Then we search for HTB acount
+![[../../IMAGES/Pasted image 20251120192659.png]]
+
+**And we get the credential:** HTB / lnch7ehrdn43i7AoqVPK4zWR
+
